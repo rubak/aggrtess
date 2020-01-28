@@ -4,7 +4,7 @@
 \alias{aggrtess}
 \title{Initialize aggregation tessellation}
 \usage{
-aggrtess(X, centers, target, ..., adjust = 1)
+aggrtess(X, centers, target, ...)
 }
 \arguments{
 \item{X}{Point pattern with n_p points and n_m columns of marks}
@@ -13,16 +13,15 @@ aggrtess(X, centers, target, ..., adjust = 1)
 
 \item{target}{vector of length n_m}
 
-\item{...}{ignored.}
-
-\item{adjust}{adjustment of target. One or n_m numbers between 0 and 1.}
+\item{...}{passed to \code{make_aggrtess_centers} when \code{target} is a string..}
 }
 \value{
-An aggregation tessellation of class \code{aggr_tess} which is a list with components:
+An aggregation tessellation of class \code{aggr_tess} which is a list with
+the main components being:
 \itemize{
 \item X: Original marked point pattern
 \item centers: Point pattern of n_c tile centers
-\item cells: tessellation with n_c tiles augmented with neighbour info
+\item tessel: tessellation with n_c tiles augmented with neighbour info
 \item counts: n_m by n_c matrix with aggregates of mark values in each tile
 Note: The aggregation tessellation does \strong{not} necessarily satisfy the aggregation
 target at this point.
@@ -32,5 +31,6 @@ target at this point.
 Initialize aggregation tessellation
 }
 \examples{
-aggrtess(frb, centers = "rthin", target = c(50, 100), )
+x <- aggrtess(frb, centers = "rectgridsample", target = c(50, 100))
+x
 }
