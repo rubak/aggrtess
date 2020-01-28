@@ -142,7 +142,7 @@ plot.aggrtess <- function(x, ..., what = "counts", collapse = NULL,
   dots <- spatstat.utils::resolve.defaults(
     ..., list(do.col = do.col, do.labels = do.labels, main = main))
   do.call("plot.tess", append(list(x=tmp), dots))
-  return(tmp)
+  return(invisible(tmp))
 }
 
 #' Find deviation from target for aggegation tessellation

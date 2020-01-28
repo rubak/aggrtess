@@ -12,6 +12,7 @@ utils::globalVariables(c(".SD", "id", ":="))
 #' Columns not (implicitly) given in these are dropped.
 #' @export
 #' @rawNamespace import(data.table, except = shift)
+#' @importFrom utils globalVariables
 #'
 #' @examples
 #' # Example with a single duplicated location

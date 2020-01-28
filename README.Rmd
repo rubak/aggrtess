@@ -11,7 +11,9 @@ knitr::opts_chunk$set(echo=TRUE, message=FALSE,
 
 ## Motivation
 
-When publishing data from official statistics agencies such as *Danmarks Statistik* there is a limit on the spatial resolution that can be used to protect the privacy of individuals. In case of Danmarks Statistik the rule is that you can only publish something for an area that contains at least 50 households and at least 100 individuals. This package makes an automatic division of a given region into a collection of subregions that satisfies this constraint.
+When publishing data from official statistics agencies such as *Danmarks Statistik* there is a limit on the spatial resolution that can be used to protect the privacy of individuals. 
+In case of Danmarks Statistik the rule is that you can only publish something for an area that contains at least 50 households and at least 100 individuals. 
+This package makes an automatic division of a given region into a collection of subregions that satisfies this constraint.
 
 ## Example data
 
@@ -37,27 +39,41 @@ A plot of the unmarked data shows the boundary and the address locations:
 plot(unmark(frb), main = "")
 ```
 
-**Note:** It is important that there are no duplicated points in the point pattern. If your data has duplicated points these should be aggregated such that two points at the same location with attributes `x_1` and `x_2` are reduced to a single point at that location with attributes `x_1+x_2`. To aggregate attributes for a big dataset use the supplied function `aggregate_duplicates` which requires the suggested R package `data.table`.
+**Note:** It is important that there are no duplicated points in the point pattern. 
+If your data has duplicated points these should be aggregated such that two points at the same location with attributes `x_1` and `x_2` are reduced to a single point at that location with attributes `x_1+x_2`. 
+To aggregate attributes for a big dataset use the supplied function `aggregate_duplicates` which requires the suggested R package `data.table`.
 
 ## Aggregation tessellation
 
-The core of the package is the concept of an aggregation tessellation. This is a subdivision of the study region into polygonal tiles (a tessellation), and then the attribute values are aggregated for all the points located inside each tile. The tessellation is defined by using a collection of tile centers to make a Voronoi/Dirichlet tessellation. Thus to define a aggregation tessellation we only need a set of centers which can be defined in several ways using `make_aggrtess_centers`. For example:
+The core of the package is the concept of an aggregation tessellation. 
+This is a subdivision of the study region into polygonal tiles (a tessellation), and then the attribute values are aggregated for all the points located inside each tile. 
+The tessellation is defined by using a collection of tile centers to make a Voronoi/Dirichlet tessellation. 
+Thus to define a aggregation tessellation we only need a set of centers which can be defined in several ways using `make_aggrtess_centers`. 
+For example:
 
-```{r}
+```{r centers}
 set.seed(42) # For reproducibility
 cent <- make_aggrtess_centers(X = frb, centers = "index_shift", target = c(50, 100))
 ```
 
-The algorithm first decides on the number of tiles based on the input marked point pattern `X` and the target vector `target` (and `adjust`). Based on the total of the attributes (households and individuals) over the region we can calculate approximately how many tiles are needed to have the `target` number of attributes in each tile. The needed number of tiles is calculated based on each attribute and then the smallest one is used. This rule can be adjusted by `adjust`, so e.g. `adjust=2` effectively doubles the target so half as many tiles are used. After deciding the number of tiles the centers are distributed according to the string `centers`. For example rectangular or hexagonal grids can be used where either the center or a random sampled location from `X` inside each grid cell is chosen as the tile center. Other options include sampling based on the index in the point pattern or random thinning of the point pattern.
+The algorithm first decides on the number of tiles based on the input marked point pattern `X` and the target vector `target` (and `adjust`). 
+Based on the total of the attributes (households and individuals) over the region we can calculate approximately how many tiles are needed to have the `target` number of attributes in each tile. 
+The needed number of tiles is calculated based on each attribute and then the smallest one is used. 
+This rule can be adjusted by `adjust`, so e.g. `adjust=2` effectively doubles the target so half as many tiles are used. 
+After deciding the number of tiles the centers are distributed according to the string `centers`. 
+For example rectangular or hexagonal grids can be used where either the center or a random sampled location from `X` inside each grid cell is chosen as the tile center. 
+Other options include sampling based on the index in the point pattern or random thinning of the point pattern.
 
 With the centers at hand an aggregation tessellation is constructed with the `aggrtess` command:
-```{r}
+```{r aggrtess}
 x <- aggrtess(frb, centers = cent, target = c(50, 100))
 plot(x)
 ```
+(We do not actually need to generate the centers first. 
+We could replace `centers = cent` above by `centers = "index_shift"` to do it in a single function call.)
 
-
-**NOTE:** The resulting aggregation tesselllation typically doesn't satisfy the target constraints at this point. This is handled below.
+**NOTE:** The resulting aggregation tesselllation typically doesn't satisfy the target constraints at this point. 
+This is handled below.
 
 ## Deleting tiles (pruning the tessellation)
 
@@ -65,30 +81,39 @@ In our example several tiles in the bottom have too few households (and individu
 
 To delete tile 134 we simply do:
 
-```{r}
+```{r delete_tile}
 x <- delete_tile(x, 134)
 plot(x)
 ```
 
-Now the tiles around the previous tile 134 have all expanded (noticed all tile ids change when the tessellation is updated). To continue the process until all tiles are above the target we use `prune_aggrtess` (this probably takes some minutes depending on your machine):
-```{r}
+Now the tiles around the previous tile 134 have all expanded (notice that tile ids can change when the tessellation is updated). 
+To continue the process until all tiles are above the target we use `prune_aggrtess` (this probably takes some minutes depending on your machine):
+```{r prune, cache=TRUE, dependson=c("centers", "aggrtess", "delete_tile")}
 y <- prune_aggrtess(x)
+```
+```{r}
 plot(y)
 ```
 
 ## Splitting tiles (filling the tessellation)
 
-At this point the tessellation satisfies the requirements set in the target, but there may big tiles with large counts of the attributes. We can try to split e.g. tile 96 or the far right using `split_tile`:
-```{r}
+At this point the tessellation satisfies the requirements set in the target, but there may be big tiles with large counts of the attributes. 
+We can try to split e.g. tile 96 on the far right using `split_tile`:
+```{r split_tile}
 set.seed(4242) # For reproducibibily
 z <- split_tile(y, 96)
 z
 plot(z)
 ```
 
+The split is done by proposing two new centers inside tile 96 (and removing the current center) and then recalculate the tessellation and aggregate the attributes. 
+Very importantly this only effects tiles that share a border with tile 96.
+At the moment the only option for proposing two new point in the tile to be split is to sample among all the points in this tile.
+We could equally we propose two new points in any other way we like -- there is no reasons for the tile centers to be sampled among the points in the point pattern apart from convenience.
+
 To automatically choose tiles for splitting we need to know which one potentially could be split, which we do the following way.
 
-For each tile we define the neighbourhood as the tile itself together with the bordering tiles. 
+For each tile we define its neighbourhood (or cluster) as the tile itself together with the bordering tiles. 
 The neighbourhood of tile 36 in the bottom right hand corner of `z` above is: $\{36,35,90,70,106\}$. 
 Based on the neighbourhood we can calculate the minimum needed counts to have a neighbourhood of this size. 
 A neighbourhood of size 5 requires a count of at least `5*target`. 
@@ -96,25 +121,43 @@ We define the excess as the amount the actual count in the neighbourhood exceeds
 If the excess is larger than the target there could potentially be introduced an extra tile in the neighbourhood and we suggest to split the center tile (36 in this case). 
 An adjustment parameter is provided to make sure the excess is somewhat above the target so the split is not too difficult.
 
+To plot the excess in each neighbourhood (cluster) accociated with a tile we do:
+```{r}
+plot(z, what = "excess")
+```
+
+Clearly many tiles have an excess of hundreds of points compared to the minimum requirement with the given number of tiles in the neighbourhood. 
+It may be better to see the average excess by dividing by the number of tiles in the neighbourhood, by adding `relative = TRUE`:
+```{r}
+plot(z, what = "excess", relative = TRUE)
+```
+
 The function `fill_aggrtess` runs trough the tessellation in order from the largest excess and tries to split each tile with excess larger than `adjust*target`. 
 If it is succesfull a new tessellation is generated and the procedure is restarted. 
 It will try a total of `max_tiles` tiles and each possible tile it will suggest to split at most `max_tries` times. 
 Please note that this can run for a long time if `max_tiles` and `max_tries` are big (the example below runs for a few minutes on my laptop):
 
-```{r}
+```{r cache=TRUE, dependson=c("prune", "split_tile")}
 set.seed(424242) # For reproducibibily
 autofill <- fill_aggrtess(z, max_tiles = 150)
 autofill
 plot(autofill)
 ```
 
-If we want to try to split a specific tile we may still do so:
+If we want to try to split a specific tile such as tile 1 we may still do so:
 
 ```{r}
 final <- split_tile(autofill, 1)
 final
 plot(final)
 ```
+
+The average excess is also much better now:
+```{r}
+plot(final, what = "excess", relative = TRUE)
+```
+
+We may think that tile 79 is a good candidate for splitting, but looking at the counts (not excess) above reveals that the neighbours 12 and 64 which would likely become smaller by a split of 79 are close to the target boundary and it wouldn't be easy to get the split accepted.
 
 ## Exporting to `sf` and viewing with `mapview`
 

@@ -102,14 +102,9 @@ x <- aggrtess(frb, centers = cent, target = c(50, 100))
 plot(x)
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
-
-    ## Tessellation
-    ## Tiles are irregular polygons
-    ## 168 tiles (irregular windows)
-    ## Tessellation has 2 columns of marks: 'households' and 'individuals'
-    ## window: polygonal boundary
-    ## enclosing rectangle: [719497.1, 723631] x [6174592, 6178107] units
+![](README_files/figure-gfm/aggrtess-1.png)<!-- --> (We do not actually
+need to generate the centers first. We could replace `centers = cent`
+above by `centers = "index_shift"` to do it in a single function call.)
 
 **NOTE:** The resulting aggregation tesselllation typically doesn’t
 satisfy the target constraints at this point. This is handled below.
@@ -126,39 +121,28 @@ x <- delete_tile(x, 134)
 plot(x)
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
+![](README_files/figure-gfm/delete_tile-1.png)<!-- -->
 
-    ## Tessellation
-    ## Tiles are irregular polygons
-    ## 167 tiles (irregular windows)
-    ## Tessellation has 2 columns of marks: 'households' and 'individuals'
-    ## window: polygonal boundary
-    ## enclosing rectangle: [719497.1, 723631] x [6174592, 6178107] units
-
-Now the tiles around the previous tile 134 have all expanded (noticed
-all tile ids change when the tessellation is updated). To continue the
-process until all tiles are above the target we use `prune_aggrtess`
+Now the tiles around the previous tile 134 have all expanded (notice
+that tile ids can change when the tessellation is updated). To continue
+the process until all tiles are above the target we use `prune_aggrtess`
 (this probably takes some minutes depending on your machine):
 
 ``` r
 y <- prune_aggrtess(x)
+```
+
+``` r
 plot(y)
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
-
-    ## Tessellation
-    ## Tiles are irregular polygons
-    ## 109 tiles (irregular windows)
-    ## Tessellation has 2 columns of marks: 'households' and 'individuals'
-    ## window: polygonal boundary
-    ## enclosing rectangle: [719497.1, 723631] x [6174592, 6178107] units
+![](README_files/figure-gfm/unnamed-chunk-3-1.png)<!-- -->
 
 ## Splitting tiles (filling the tessellation)
 
 At this point the tessellation satisfies the requirements set in the
-target, but there may big tiles with large counts of the attributes. We
-can try to split e.g. tile 96 or the far right using `split_tile`:
+target, but there may be big tiles with large counts of the attributes.
+We can try to split e.g. tile 96 on the far right using `split_tile`:
 
 ``` r
 set.seed(4242) # For reproducibibily
@@ -175,29 +159,52 @@ z
 plot(z)
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
+![](README_files/figure-gfm/split_tile-1.png)<!-- -->
 
-    ## Tessellation
-    ## Tiles are irregular polygons
-    ## 110 tiles (irregular windows)
-    ## Tessellation has 2 columns of marks: 'households' and 'individuals'
-    ## window: polygonal boundary
-    ## enclosing rectangle: [719497.1, 723631] x [6174592, 6178107] units
+The split is done by proposing two new centers inside tile 96 (and
+removing the current center) and then recalculate the tessellation and
+aggregate the attributes. Very importantly this only effects tiles that
+share a border with tile 96. At the moment the only option for proposing
+two new point in the tile to be split is to sample among all the points
+in this tile. We could equally we propose two new points in any other
+way we like – there is no reasons for the tile centers to be sampled
+among the points in the point pattern apart from convenience.
 
 To automatically choose tiles for splitting we need to know which one
 potentially could be split, which we do the following way.
 
-For each tile we define the neighbourhood as the tile itself together
-with the bordering tiles. The neighbourhood of tile 36 in the bottom
-right hand corner of `z` above is: \(\{36,35,90,70,106\}\). Based on the
-neighbourhood we can calculate the minimum needed counts to have a
-neighbourhood of this size. A neighbourhood of size 5 requires a count
-of at least `5*target`. We define the excess as the amount the actual
-count in the neighbourhood exceeds this minimum. If the excess is larger
-than the target there could potentially be introduced an extra tile in
-the neighbourhood and we suggest to split the center tile (36 in this
-case). An adjustment parameter is provided to make sure the excess is
-somewhat above the target so the split is not too difficult.
+For each tile we define its neighbourhood (or cluster) as the tile
+itself together with the bordering tiles. The neighbourhood of tile 36
+in the bottom right hand corner of `z` above is:
+\(\{36,35,90,70,106\}\). Based on the neighbourhood we can calculate the
+minimum needed counts to have a neighbourhood of this size. A
+neighbourhood of size 5 requires a count of at least `5*target`. We
+define the excess as the amount the actual count in the neighbourhood
+exceeds this minimum. If the excess is larger than the target there
+could potentially be introduced an extra tile in the neighbourhood and
+we suggest to split the center tile (36 in this case). An adjustment
+parameter is provided to make sure the excess is somewhat above the
+target so the split is not too difficult.
+
+To plot the excess in each neighbourhood (cluster) accociated with a
+tile we do:
+
+``` r
+plot(z, what = "excess")
+```
+
+![](README_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
+
+Clearly many tiles have an excess of hundreds of points compared to the
+minimum requirement with the given number of tiles in the neighbourhood.
+It may be better to see the average excess by dividing by the number of
+tiles in the neighbourhood, by adding `relative = TRUE`:
+
+``` r
+plot(z, what = "excess", relative = TRUE)
+```
+
+![](README_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
 
 The function `fill_aggrtess` runs trough the tessellation in order from
 the largest excess and tries to split each tile with excess larger than
@@ -223,16 +230,10 @@ autofill
 plot(autofill)
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
 
-    ## Tessellation
-    ## Tiles are irregular polygons
-    ## 136 tiles (irregular windows)
-    ## Tessellation has 2 columns of marks: 'households' and 'individuals'
-    ## window: polygonal boundary
-    ## enclosing rectangle: [719497.1, 723631] x [6174592, 6178107] units
-
-If we want to try to split a specific tile we may still do so:
+If we want to try to split a specific tile such as tile 1 we may still
+do so:
 
 ``` r
 final <- split_tile(autofill, 1)
@@ -248,14 +249,20 @@ final
 plot(final)
 ```
 
-![](README_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
+![](README_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
 
-    ## Tessellation
-    ## Tiles are irregular polygons
-    ## 137 tiles (irregular windows)
-    ## Tessellation has 2 columns of marks: 'households' and 'individuals'
-    ## window: polygonal boundary
-    ## enclosing rectangle: [719497.1, 723631] x [6174592, 6178107] units
+The average excess is also much better now:
+
+``` r
+plot(final, what = "excess", relative = TRUE)
+```
+
+![](README_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
+
+We may think that tile 79 is a good candidate for splitting, but looking
+at the counts (not excess) above reveals that the neighbours 12 and 64
+which would likely become smaller by a split of 79 are close to the
+target boundary and it wouldn’t be easy to get the split accepted.
 
 ## Exporting to `sf` and viewing with `mapview`
 
